@@ -49,10 +49,10 @@ int main(int argc,char *argv[])
 		exit(1);
 	}
 	//buf[num-1] ='\0';
-	struct gateway_frame frame;
+	struct frame_head frame;
 	int buf_len = strlen(buf);
-	get_frame(&frame,buf,buf_len);
-	print_frame(&frame);
+	printf("strlen(buf)=%d\n",buf_len);
+	get_frame(&frame,buf);
 	//printf("server message:%s\n",buf);
 	//puts(buf);
 	close(sockfd);

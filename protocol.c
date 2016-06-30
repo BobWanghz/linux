@@ -2,33 +2,36 @@
 #include"frame.h"
 #include<string.h>
 
+#define FRAME_LEN 30 
 
 unsigned char device_id_global[DEVICE_LEN] = "abcdabcdabcdabc";
+unsigned char* token;
+unsigned char * data;
 /* Set frame,all function return 0 when succeed,return -1 when error*/
-int init_frame(struct gateway_frame *frame)
+int init_frame(struct frame_head *frame)
 {
 	frame->head = HEAD;
-	frame->tail = TAIL;
 	frame->expend = EXPEND;
-	frame->token_len = 0; //set
-	frame->length = 15 + DEVICE_LEN;
+	frame->token_len = 0; 
+	frame->data_len = 0;
+	frame->length = FRAME_LEN;
 	return 0;
 }
 
-int set_cmd(struct gateway_frame *frame,unsigned char cmd_type,unsigned char cmd)
+int set_cmd(struct frame_head *frame,unsigned char cmd_type,unsigned char cmd)
 {
 	frame->cmd_type = cmd_type;
 	frame->cmd = cmd;
 	return 0;
 }
 
-int set_status(struct gateway_frame *frame,unsigned char status)
+int set_status(struct frame_head *frame,unsigned char status)
 {
 	frame->status = status;
 	return 0;
 }
 
-int set_device_id(struct gateway_frame *frame,unsigned char * device_id)
+int set_device_id(struct frame_head *frame,unsigned char * device_id)
 {
 	if(device_id == NULL){
 		return -1;
@@ -36,55 +39,31 @@ int set_device_id(struct gateway_frame *frame,unsigned char * device_id)
 	memcpy(frame->device_id,device_id,DEVICE_LEN);
 	return 0;
 }
-
-int set_token(struct gateway_frame *frame,unsigned char* token,unsigned short len)
+int copy_frame(unsigned char* buf,struct frame_head frame)
 {
-	printf("Set_token\n");
-	if(NULL == token){
-		return -1;
-	}
-	frame->token_len = len;
-	frame->token = token;
-	if(NULL == frame->token)
-	{
-		return -1;
-	}
-	//to add the token_len to total length of gateway_frame
-	frame->length += len;
-	return 0;
-}
-int set_data(struct gateway_frame *frame,unsigned char *data,int data_len)
-{
-	if(data == NULL){
-		return -1;
-	}
-	frame->data = data;
-	//Add length of data to total length
-	frame->length += data_len;
-	return 0;
-}
-
-int set_crc(struct gateway_frame *frame)
-{
-	printf("frame length is %x\n",frame->length);
-	if(frame->length <= (15 + DEVICE_LEN)){
-		return -1;
-	}
-	unsigned short crc_len = frame->length - 3;
-	unsigned char *crc_buf = malloc(crc_len);
-	memcpy(crc_buf,(unsigned char *)&frame,crc_len);
-	unsigned short crc16 = cal_crc16(crc_buf,crc_len);
-	frame->crc = crc16;
+	buf[0] = frame.head;
+	memcpy(&buf[1],&frame.length,2);
+	buf[3] = frame.cmd_type;
+	buf[4] = frame.cmd;
+	memcpy(&buf[5],&frame.cmd_seq,2);
+	memcpy(&buf[7],&frame.expend,2);
+	buf[9] = frame.status;
+	memcpy(&buf[10],frame.device_id,DEVICE_LEN);
+	memcpy(&buf[26],&frame.token_len,2);
+	memcpy(&buf[28],&frame.data_len,2);
 	return 0;
 }
 int send_frame(int s,const void* msg,int len,unsigned int flags)
 {
-	struct gateway_frame frame;
-	unsigned char whz[] = "wanghauzhong";
-	unsigned char token[20];
-	memset(token,0,20);
-	memcpy(token,whz,strlen(whz));
-	unsigned short length_token = strlen(token);
+	struct frame_head frame;
+	unsigned char token[] = "wanghauzhong";
+	unsigned char send_buf[512];
+	unsigned char tail[4];
+	int i = 0;
+	unsigned short token_length = strlen(token);
+	int send_len = 0;
+
+	memset(send_buf,0,512);
 	if(init_frame(&frame) != 0){
 		perror("init_frame error");
 	}
@@ -94,25 +73,36 @@ int send_frame(int s,const void* msg,int len,unsigned int flags)
 	if(set_cmd(&frame,0xA0,0x01) != 0){
 		perror("set_cmd error");
 	}
-	//set device id
-	printf("device_id_global is %s\n",device_id_global);
 	if(set_device_id(&frame,device_id_global) != 0){
 		perror("set_device_id error");
 	}
-	if(set_token(&frame,&token[0],(unsigned short)strlen(token)) != 0){
-		perror("set_token error");
-	}
-
-	if(set_data(&frame,(unsigned char *)msg,len) != 0){
-		perror("set_data error");
-	}
-	int result;
-	if((result = set_crc(&frame)) != 0){
-		printf("Set_crc return %d\n",result);
-		perror("set_crc error");
-	}
+	frame.data_len += len;
+	frame.token_len += token_length;
+	frame.length += len;
+	frame.length += token_length;
+	copy_frame(send_buf,frame);
+	//memcpy(send_buf,(char *)&frame,FRAME_LEN);
+	printf("%s\n",send_buf);
+	strcat(send_buf,token);
+	printf("%s\n",send_buf);
+	strcat(send_buf,msg);
+	printf("%s\n",send_buf);
+	send_len = strlen(send_buf);
+	unsigned short crc = cal_crc16(send_buf,send_len);
+	sprintf(tail,"%hd",crc);
+	tail[2] = 0x55;
+	strcat(send_buf,tail);
+	send_len = strlen(send_buf);
 	print_frame(&frame);
-	return send(s,&frame,frame.length,flags);
+	printf("token:%s\n",token);
+	printf("data:%s\n",msg);
+	printf("crc:%hu\n",crc);
+	printf("tail:%x\n",0x55);
+	//for(i = 0;i < strlen(send_buf);++i)
+	//	printf("%x\n",send_buf[i]);
+	printf("length of send_buf:%d\n",send_len);
+	//printf("\n");
+	return send(s,send_buf,send_len,flags);
 }
 
 //crc16
@@ -134,16 +124,30 @@ unsigned short cal_crc16(unsigned char * buf,unsigned int len)
 	return crc16;
 }
 
-//Get gateway_frame from buf recieved
-int get_frame(struct gateway_frame *frame,unsigned char* buf,int buf_len)
+//Get frame_head from buf recieved
+int get_frame(struct frame_head *frame,unsigned char* buf)
 {
-	if(NULL == buf || buf_len <= 0)
+	if(NULL == buf)
 		return -1;
-	memcpy(frame,buf,buf_len);
+	unsigned char token[30];
+	unsigned char data[512];
+	printf("length of buf:%d\n",strlen(buf));
+	memset(token,0,token);
+	memset(data,0,512);
+	memcpy(frame,buf,FRAME_LEN);
 	print_frame(frame);
+	memcpy(token,&buf[FRAME_LEN],frame->token_len);
+	memcpy(data,&buf[FRAME_LEN + frame->token_len],frame->data_len);
+	printf("token:%s\n",token);
+	printf("data:%s\n",data);
+	unsigned char crc = buf[strlen(buf) - 3];
+	printf("crc:%hu\rn",crc);
+	unsigned char tail = buf[strlen(buf) - 1];
+	printf("tail:%x\n",0x55);
 }
+
 /*
-int get_frame(struct gateway_frame *frame,unsigned char* buf)
+int get_frame(struct frame_head *frame,unsigned char* buf)
 {
 	if(NULL == buf)
 		return -1;
@@ -180,7 +184,7 @@ int get_frame(struct gateway_frame *frame,unsigned char* buf)
 	return 0;
 }
 */
-void print_frame(struct gateway_frame *frame)
+void print_frame(struct frame_head *frame)
 {
 	printf("head = %x\n",frame->head);
 	printf("length = %hu\n",frame->length);
@@ -191,14 +195,11 @@ void print_frame(struct gateway_frame *frame)
 	printf("status = %x\n",frame->status);
 	printf("device_id is:%s\n",frame->device_id);
 	printf("token_len = %hu\n",frame->token_len);
-	printf("token is:%s\n",frame->token);
-	printf("data is:%s\n",frame->data);
-	printf("crc = %hu\n",frame->crc);
-	printf("tail = %x\n",frame->tail);
+	printf("data_len is:%d\n",frame->data_len);
 }
 
 /*
-int gateway(struct gateway_frame frame)
+int gateway(struct frame_head frame)
 {
 	unsigned char cmd_type = frame.cmd_type;
 	if(cmd_type == LINK){ 
@@ -217,8 +218,8 @@ int gateway(struct gateway_frame frame)
 	return 0;
 }
 
-//handle link opration,data store the gateway_frame.data
-int gw_link(struct gateway_frame frame,unsigned char* data)
+//handle link opration,data store the frame_head.data
+int gw_link(struct frame_head frame,unsigned char* data)
 {
 	data = frame.data;
 	int len = sizeof(data);
