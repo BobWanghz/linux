@@ -6,6 +6,9 @@
 #include<netinet/in.h>
 #include<netdb.h> //for struct hostent
 
+
+#include"frame.h"
+
 #define PORT 12345
 
 #define MAXDATASIZE 100
@@ -36,8 +39,8 @@ int main(int argc,char *argv[])
 		perror("connect() error");
 		exit(1);
 	}
-	char str[] = "whz\n";
-	if((num = send(sockfd,str,sizeof(str),0)) == -1){
+	char str[] = "My name is WHZ\n";
+	if((num = send_frame(sockfd,str,strlen(str),0)) == -1){
 		perror("send() error");
 		exit(1);
 	}
@@ -45,8 +48,12 @@ int main(int argc,char *argv[])
 		perror("recv() error");
 		exit(1);
 	}
-	buf[num-1] ='\0';
-	printf("server message:%s\n",buf);
+	//buf[num-1] ='\0';
+	struct gateway_frame frame;
+	int buf_len = strlen(buf);
+	get_frame(&frame,buf,buf_len);
+	print_frame(&frame);
+	//printf("server message:%s\n",buf);
 	//puts(buf);
 	close(sockfd);
 	return 0;
