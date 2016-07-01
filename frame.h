@@ -41,6 +41,8 @@ int set_device_id(struct frame_head *frame,unsigned char * device_id);
 int get_frame(struct frame_head *frame,unsigned char* buf);
 int send_frame(int s,const void *msg,int len,unsigned int flags);
 void print_frame(struct frame_head *frame);
+int copy_to_frame(struct frame_head* f,unsigned char* buf);
+int copy_fram_frame(unsigned char* buf,struct frame_head* f);
 
 #define EXPEND 0x00
 //unsigned char device_id_global[16] = {0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0xA,0xB,0xC,0xD,0xE,0xF};

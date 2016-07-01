@@ -1,8 +1,8 @@
 #include<stdio.h>
 #include"frame.h"
 #include<string.h>
-
-#define FRAME_LEN 30 
+#define TAIL_LEN 3
+#define FRAME_LEN 30
 
 unsigned char device_id_global[DEVICE_LEN] = "abcdabcdabcdabc";
 unsigned char* token;
@@ -39,18 +39,35 @@ int set_device_id(struct frame_head *frame,unsigned char * device_id)
 	memcpy(frame->device_id,device_id,DEVICE_LEN);
 	return 0;
 }
-int copy_frame(unsigned char* buf,struct frame_head frame)
+int copy_from_frame(unsigned char* buf,struct frame_head *frame)
 {
-	buf[0] = frame.head;
-	memcpy(&buf[1],&frame.length,2);
-	buf[3] = frame.cmd_type;
-	buf[4] = frame.cmd;
-	memcpy(&buf[5],&frame.cmd_seq,2);
-	memcpy(&buf[7],&frame.expend,2);
-	buf[9] = frame.status;
-	memcpy(&buf[10],frame.device_id,DEVICE_LEN);
-	memcpy(&buf[26],&frame.token_len,2);
-	memcpy(&buf[28],&frame.data_len,2);
+	int i = 0;
+	buf[0] = frame->head;
+	memcpy(&buf[1],&frame->length,2);
+	buf[3] = frame->cmd_type;
+	buf[4] = frame->cmd;
+	memcpy(&buf[5],&frame->cmd_seq,2);
+	memcpy(&buf[7],&frame->expend,2);
+	buf[9] = frame->status;
+	memcpy(&buf[10],frame->device_id,DEVICE_LEN);
+	memcpy(&buf[26],&frame->token_len,2);
+	memcpy(&buf[28],&frame->data_len,2);
+	return 0;
+}
+
+int copy_to_frame(struct frame_head* f,unsigned char* buf)
+{
+	f->head = buf[0];
+	f->length = (unsigned short)buf[1];
+	f->cmd_type = buf[3];
+	f->cmd = buf[4];
+	f->cmd_seq = (unsigned short)buf[5];
+	f->expend = (unsigned short)buf[7];
+	f->status = buf[9];
+	memcpy(f->device_id,&buf[10],DEVICE_LEN);
+	f->token_len = (unsigned short)buf[26];
+	f->data_len = (unsigned short)buf[28];
+	print_frame(f);
 	return 0;
 }
 int send_frame(int s,const void* msg,int len,unsigned int flags)
@@ -58,7 +75,6 @@ int send_frame(int s,const void* msg,int len,unsigned int flags)
 	struct frame_head frame;
 	unsigned char token[] = "wanghauzhong";
 	unsigned char send_buf[512];
-	unsigned char tail[4];
 	int i = 0;
 	unsigned short token_length = strlen(token);
 	int send_len = 0;
@@ -80,29 +96,25 @@ int send_frame(int s,const void* msg,int len,unsigned int flags)
 	frame.token_len += token_length;
 	frame.length += len;
 	frame.length += token_length;
-	copy_frame(send_buf,frame);
+	frame.length += TAIL_LEN;
+	copy_from_frame(send_buf,&frame);
 	//memcpy(send_buf,(char *)&frame,FRAME_LEN);
-	printf("%s\n",send_buf);
-	strcat(send_buf,token);
-	printf("%s\n",send_buf);
-	strcat(send_buf,msg);
-	printf("%s\n",send_buf);
+	memcpy(&send_buf[FRAME_LEN],token,token_length);
+	memcpy(&send_buf[FRAME_LEN + token_length],msg,len);
 	send_len = strlen(send_buf);
 	unsigned short crc = cal_crc16(send_buf,send_len);
-	sprintf(tail,"%hd",crc);
-	tail[2] = 0x55;
-	strcat(send_buf,tail);
+	memcpy(&send_buf[FRAME_LEN + token_length + len],&crc,2);
+	send_buf[FRAME_LEN + token_length + len + 2] = 0x55;
 	send_len = strlen(send_buf);
 	print_frame(&frame);
 	printf("token:%s\n",token);
 	printf("data:%s\n",msg);
-	printf("crc:%hu\n",crc);
+	printf("crc:%x\n",crc);
 	printf("tail:%x\n",0x55);
-	//for(i = 0;i < strlen(send_buf);++i)
-	//	printf("%x\n",send_buf[i]);
-	printf("length of send_buf:%d\n",send_len);
-	//printf("\n");
-	return send(s,send_buf,send_len,flags);
+	for(i = 0;i < frame.length;++i)
+		printf("%x ",send_buf[i]);
+	printf("\n");
+	return send(s,send_buf,frame.length,flags);
 }
 
 //crc16
@@ -131,19 +143,22 @@ int get_frame(struct frame_head *frame,unsigned char* buf)
 		return -1;
 	unsigned char token[30];
 	unsigned char data[512];
-	printf("length of buf:%d\n",strlen(buf));
-	memset(token,0,token);
+	memset(token,0,30);
 	memset(data,0,512);
-	memcpy(frame,buf,FRAME_LEN);
-	print_frame(frame);
+	int i = 0;
+	copy_to_frame(frame,buf);
+	for(i = 0;i < frame->length;i++)
+		printf("%x ",buf[i]);
+	printf("\n");
 	memcpy(token,&buf[FRAME_LEN],frame->token_len);
 	memcpy(data,&buf[FRAME_LEN + frame->token_len],frame->data_len);
 	printf("token:%s\n",token);
 	printf("data:%s\n",data);
-	unsigned char crc = buf[strlen(buf) - 3];
-	printf("crc:%hu\rn",crc);
-	unsigned char tail = buf[strlen(buf) - 1];
-	printf("tail:%x\n",0x55);
+	unsigned short crc ;;
+	memcpy(&crc,&buf[frame->length -3],2);
+	printf("crc:%x\n",crc);
+	unsigned char tail = buf[frame->length - 1];
+	printf("tail:%x\n",tail);
 }
 
 /*

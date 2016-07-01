@@ -39,7 +39,7 @@ int main(int argc,char *argv[])
 		perror("connect() error");
 		exit(1);
 	}
-	char str[] = "My name is WHZ\n";
+	char str[] = "My name is WHZ";
 	if((num = send_frame(sockfd,str,strlen(str),0)) == -1){
 		perror("send() error");
 		exit(1);
@@ -50,8 +50,6 @@ int main(int argc,char *argv[])
 	}
 	//buf[num-1] ='\0';
 	struct frame_head frame;
-	int buf_len = strlen(buf);
-	printf("strlen(buf)=%d\n",buf_len);
 	get_frame(&frame,buf);
 	//printf("server message:%s\n",buf);
 	//puts(buf);
