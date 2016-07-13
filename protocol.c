@@ -2,7 +2,8 @@
 #include"frame.h"
 #include<string.h>
 
-#define __DEBUG__ 1
+#define __TRACE__	1
+#define __DEBUG__	1
 #include"debug.h"
 #define TAIL_LEN 3
 #define FRAME_LEN 30
@@ -125,6 +126,13 @@ int send_frame(int s,const void* msg,int len,unsigned int flags)
 	return send(s,buffer,send_length,flags);
 }
 
+/**
+ *	encode() will escape string.Except the srring's start and end,
+ *	encode() will turn 0x55 to 0x54 0x01,turn 0x54 to 0x54 0x02.
+ *	@param	dst is the string after escaping.
+ *	@param	src is the string going to escape.
+ *	@return return the length of string after escaping.
+ */
 int encode(u8* dst,u8* src)
 {
 	if(NULL == src || NULL == dst){
@@ -148,22 +156,12 @@ int encode(u8* dst,u8* src)
 	return j;
 }
 
-/*
-int get_length(u8* buf)		//get the length after encode but decode before
-{
-	if(NULL == buf){
-		DEBUG("NULL pointer error!\n");
-		return 0;
-	}
-	int i = 1;
-	int buf_len = 2;
-	while(buf[i] != 0x55){
-		buf_len ++;
-	}
-	return buf_len;
-}
-*/
-
+/**
+ *	decode() will turn the escaping string back.
+ *	@param	dst is the string after decode(),is real data.
+ *	@param src is the escaping string,is the string needed to decode().
+ *	@return return the length of dst string.
+ */
 int decode(u8* dst,u8* src)
 {
 	if(NULL == dst || NULL == src){
@@ -188,7 +186,13 @@ int decode(u8* dst,u8* src)
 	dst[j++] = src[i];
 	return j;
 }
-//crc16
+
+/**
+ *	cal_crc16() compute the crc16.
+ *	@param	buf is the string need to be computed CRC16.
+ *	@param	len is the length of buf.
+ *	@return return the value of CRC16.
+ */
 u16 cal_crc16(u8 * buf,unsigned int len)
 {
 	if(NULL == buf)
@@ -253,52 +257,4 @@ void print_frame(struct frame_head *frame)
 	printf("data_len is:%d\n",frame->data_len);
 }
 
-/*
-int gateway(struct frame_head *frame)
-{
-	u8 cmd_type = frame->cmd_type;
-	if(cmd_type == LINK){ 
-		gw_link(frame);   //deal with link control
-	}else if(cmd_type == DATA_TX){
-		gw_data_tx(frame);  //handle data TX
-	}else if(cmd_type == TERMINAL_OPRATION){
-		gw_terminal_op(frame); //handle opration with terminal
-	}else if(cmd_type == COMMUNICATION){
-		gw_comm(frame); //handle communication with app
-	}else{
-		//error handle 
-		DEBUG("error command type ");
-		return -1;
-	}
-	return 0;
-}
 
-//handle link opration,data store the frame_head.data
-int gw_link(struct frame_head* frame)
-{
-	if(frame.cmd == 0x00){//sign up and login
-	
-	}else if(frame.cmd == 0x01){  //heart beaten
-	
-	}else if(frame.cmd == 0x55){  //point to point communication request
-	
-	}else{
-		DEBUG("error with command");
-		return 1;
-	}
-}
-
-int gw_data_tx(struct frame_head* f)
-{
-
-}
-
-int gw_terminal_op(struct frame_head* f)
-{
-
-}
-
-int gw_comm(u8* buf)
-{
-}
-*/
