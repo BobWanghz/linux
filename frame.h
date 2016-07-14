@@ -6,6 +6,8 @@
 #define TAIL 0x55 //tail of frame_head
 
 #define DEVICE_LEN 16 //device_id use DEVICE_LEN bytes
+#define MAX_DATA_LEN 512
+#define BUFFER_COUNT 10
 //command type define
 #define LINK 0xA0  //command type is link operation
 #define ACK_P2P 0xEE //confirmation of point to point
@@ -30,12 +32,20 @@ struct frame_head
 	u16 data_len;	
 }__attribute__((packed));
 
-struct send_buffer
+/*
+stuct receive_buffer
 {
-	u8 id[10];
-	u8 data[10][512];
+	u8 buf[MAX_DATA_LEN];
+	u8 stat;		//0 means this buffer is empty,1 -- used
+	u16 length;
 };
-
+*/
+struct buffer
+{
+	u8 data[BUFFER_COUNT][MAX_DATA_LEN];
+	u8 first;
+	u8 last;
+}
 u16 cal_crc16(u8* buf,unsigned int len);
 int init_frame(struct frame_head *frame);
 int set_cmd(struct frame_head *frame,u8 cmd_type,u8 cmd);

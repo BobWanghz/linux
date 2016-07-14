@@ -5,7 +5,7 @@
 #include<sys/socket.h>
 #include<netinet/in.h>
 #include<netdb.h> //for struct hostent
-
+#include<pthread.h>
 
 #include"frame.h"
 
@@ -40,6 +40,7 @@ int main(int argc,char *argv[])
 		exit(1);
 	}
 	char str[] = "My name is WHZ";
+	/*
 	if((num = send_frame(sockfd,str,strlen(str),0)) == -1){
 		perror("send() error");
 		exit(1);
@@ -54,5 +55,11 @@ int main(int argc,char *argv[])
 	//printf("server message:%s\n",buf);
 	//puts(buf);
 	close(sockfd);
+	*/
+	pthread_t tid1,tid2;
+	while(1){
+		pthread_create(&tid1,NULL,threadsend,&sockfd);
+		pthread_create(&tid2,NULL,threadrecv,&sockfd);
+	}
 	return 0;
 }

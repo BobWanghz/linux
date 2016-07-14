@@ -7,10 +7,18 @@
 #include"debug.h"
 #define TAIL_LEN 3
 #define FRAME_LEN 30
+struct buffer tx_buf;
+//struct buffer rx_buf;
 
 u8 device_id_global[DEVICE_LEN] = "UbcdUbcdUbcdUbc";
 u8* token;
 u8 * data;
+
+int init(void)
+{
+	tx_buf.first = 0;
+	tx_buf.last = 0;
+}
 /* Set frame,all function return 0 when succeed,return -1 when error*/
 int init_frame(struct frame_head *frame)
 {
@@ -74,17 +82,19 @@ int copy_to_frame(struct frame_head* f,u8* buf)
 	print_frame(f);
 	return 0;
 }
-int send_frame(int s,const void* msg,int len,unsigned int flags)
+int set_frame(const void* msg,int len)
 {
+	if((tx_buf.last + 1)%BUFFER_COUNT == tx_buf.first){
+		DEBUG("Send buffer is full!\n");
+		return -1;
+	}
 	struct frame_head frame;
 	u8 token[] = "wanghauzhong";
 	u8 send_buf[512];
-	u8 buffer[512];
 	int i = 0;
 	u16 token_length = strlen(token);
-
+	
 	memset(send_buf,0,512);
-	memset(buffer,0,512);
 	if(init_frame(&frame) != 0){
 		DEBUG("init_frame error");
 	}
@@ -117,13 +127,25 @@ int send_frame(int s,const void* msg,int len,unsigned int flags)
 	for(i = 0;i < frame.length;++i)
 		printf("%x ",send_buf[i]);
 	printf("\n");
-	int send_length = encode(buffer,send_buf);
+	int send_length = encode(tx_buf.data[tx_buf.last],send_buf);
+	tx_buf.last = (tx_buf.last + 1)%BUFFER_COUNT;
 	for(i = 0;i < send_length;i++){
-		printf("%x ",buffer[i]);
+		printf("%x ",tx_buf.data[tx_buf.last][i]);
 	}
 	printf("\n");
-	DEBUG("send_length = %d\n",send_length);
-	return send(s,buffer,send_length,flags);
+	return 0;
+}
+int send_frame(int s,unsigned int flags)
+{
+	if(tx_buf.first == tx_buf.last){
+		DEBUG("Send buffer is empty!\n");
+		return -1;
+	}
+	u16 length = tx_buf[first][1];
+	//memcpy(buf,tx_buf[first],length);
+	tx_buf.first = (tx.first + 1)%BUFFER_COUNT;
+	return send(s,tx_buf.data[first],length,flags);
+	
 }
 
 /**
@@ -213,7 +235,12 @@ u16 cal_crc16(u8 * buf,unsigned int len)
 
 //Get frame_head from buf recieved
 int get_frame(struct frame_head *frame,u8* buf)
-{
+{	
+	/*
+	if(rx_buf.first == rx_buf.last){
+		DEBUG("Receive buffer is empty!\n");
+		return -1;
+	}*/
 	if(NULL == buf)
 		return -1;
 	u8 token[30];

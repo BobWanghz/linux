@@ -7,11 +7,17 @@
 #include<sys/socket.h>
 #include<netinet/in.h>
 #include<arpa/inet.h>
+#include<pthread.h>
+#include"frame.h"
 
 #define PORT 12345
 
 #define BACKLOG 10
 #define MAXRECVLEN 1024
+struct buffer rx_buf;
+void *threadsend(void *vargp);
+void *threadrecv(void *vargp);
+void *thread(void *vargp);
 
 int main(int argc,char *argv[])
 {
@@ -48,6 +54,8 @@ int main(int argc,char *argv[])
 		exit(1);
 	}
 	addrlen = sizeof(client);
+	pthread_t tid1,tid2;
+	/* 
 	while(1){
 		if((connectfd = accept(listenfd,(struct sockaddr *)&client,&addrlen)) == -1){
 			perror("accept() errror");
@@ -55,9 +63,8 @@ int main(int argc,char *argv[])
 		}
 		struct timeval tv;
 		gettimeofday(&tv,NULL);
-		printf("You got a connection from client's ip %s,port %d at time %ld.%ld\n",\
-				inet_ntoa(client.sin_addr),htons(client.sin_port),tv.tv_sec,tv.tv_usec);
-
+		printf("You got a connection from client's ip %s,port %d\n",\
+				inet_ntoa(client.sin_addr),htons(client.sin_port));
 		int iret = -1;
 		while(1){
 			iret = recv(connectfd,buf,MAXRECVLEN,0);
@@ -71,5 +78,13 @@ int main(int argc,char *argv[])
 		}
 	}
 	close(listenfd); //close listenfd
-	return 0;
+	*/
+	while(1){
+		connectfd = accept(listen,(struct sockaddr*)&client,&addrlen);
+		//pthread_t tid;
+		//pthread_create(&tid,NULL,thread,&connectfd);
+		pthread_create(&tid1,NULL,threadsend,&connectfd);
+		pthread_create(%tid2,NULL,threadrecv,&connectfd);
+	}
+	return EXIT_SUCCESS;
 }
