@@ -8,7 +8,7 @@
 #include<pthread.h>
 
 #include"frame.h"
-
+#include"mypthread.h"
 #define PORT 12345
 
 #define MAXDATASIZE 100

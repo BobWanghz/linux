@@ -2,8 +2,8 @@
 #define __FRAME_H__
 
 #define MAXTU 1400  //max transform unit
-#define HEAD 0x55  //head of frame_head
-#define TAIL 0x55 //tail of frame_head
+#define HEAD 0x55  //head of frame
+#define TAIL 0x55 //tail of frame
 
 #define DEVICE_LEN 16 //device_id use DEVICE_LEN bytes
 #define MAX_DATA_LEN 512
@@ -18,10 +18,10 @@
 typedef unsigned char	u8;
 typedef unsigned short	u16;
 typedef unsigned int	u32;
-struct frame_head
+struct frame
 {
-	u8 head;  //head of frame_head 0
-	u16 length;  //frame_head length 1
+	u8 head;
+	u16 length;  //frame length 1
 	u8 cmd_type;  //command type 3
 	u8 cmd;       //command 4
 	u16 cmd_seq;  //command sequence 5
@@ -29,7 +29,11 @@ struct frame_head
 	u8 status;     //9
 	u8 device_id[DEVICE_LEN];  //the id of device 10
 	u16 token_len;    //the length of token 25
-	u16 data_len;	
+	u8* token;
+	u16 data_len;
+	u8* data;
+	u16 crc;
+	u8 tail;
 }__attribute__((packed));
 
 /*
@@ -45,17 +49,17 @@ struct buffer
 	u8 data[BUFFER_COUNT][MAX_DATA_LEN];
 	u8 first;
 	u8 last;
-}
+};
 u16 cal_crc16(u8* buf,unsigned int len);
-int init_frame(struct frame_head *frame);
-int set_cmd(struct frame_head *frame,u8 cmd_type,u8 cmd);
-int set_status(struct frame_head *frame,u8 status);
-int set_device_id(struct frame_head *frame,u8 * device_id);
-int get_frame(struct frame_head *frame,u8* buf);
-int send_frame(int s,const void *msg,int len,unsigned int flags);
-void print_frame(struct frame_head *frame);
-int copy_to_frame(struct frame_head* f,u8* buf);
-int copy_fram_frame(u8* buf,struct frame_head* f);
+int init_frame(struct frame *f);
+int set_cmd(struct frame *f,u8 cmd_type,u8 cmd);
+int set_status(struct frame *f,u8 status);
+int set_device_id(struct frame *f,u8 * device_id);
+int get_frame(struct frame *f,u8* buf);
+int send_frame(int s,unsigned int flags);
+void print_frame(struct frame *f);
+int copy_to_frame(struct frame* f,u8* buf);
+int copy_fram_frame(u8* buf,struct frame* f);
 
 #define EXPEND 0x00
 //u8 device_id_global[16] = {0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0xA,0xB,0xC,0xD,0xE,0xF};

@@ -9,15 +9,11 @@
 #include<arpa/inet.h>
 #include<pthread.h>
 #include"frame.h"
-
+#include"mypthread.h"
 #define PORT 12345
 
 #define BACKLOG 10
 #define MAXRECVLEN 1024
-struct buffer rx_buf;
-void *threadsend(void *vargp);
-void *threadrecv(void *vargp);
-void *thread(void *vargp);
 
 int main(int argc,char *argv[])
 {
@@ -54,8 +50,8 @@ int main(int argc,char *argv[])
 		exit(1);
 	}
 	addrlen = sizeof(client);
-	pthread_t tid1,tid2;
-	/* 
+	//pthread_t tid1,tid2;
+	/*
 	while(1){
 		if((connectfd = accept(listenfd,(struct sockaddr *)&client,&addrlen)) == -1){
 			perror("accept() errror");
@@ -81,10 +77,10 @@ int main(int argc,char *argv[])
 	*/
 	while(1){
 		connectfd = accept(listen,(struct sockaddr*)&client,&addrlen);
-		//pthread_t tid;
-		//pthread_create(&tid,NULL,thread,&connectfd);
-		pthread_create(&tid1,NULL,threadsend,&connectfd);
-		pthread_create(%tid2,NULL,threadrecv,&connectfd);
+		pthread_t tid;
+		pthread_create(&tid,NULL,thread,&connectfd);
+		//pthread_create(&tid1,NULL,threadsend,&connectfd);
+		//pthread_create(&tid2,NULL,threadrecv,&connectfd);
 	}
 	return EXIT_SUCCESS;
 }

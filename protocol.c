@@ -20,54 +20,93 @@ int init(void)
 	tx_buf.last = 0;
 }
 /* Set frame,all function return 0 when succeed,return -1 when error*/
-int init_frame(struct frame_head *frame)
+int init_frame(struct frame *f)
 {
-	frame->head = HEAD;
-	frame->expend = EXPEND;
-	frame->token_len = 0; 
-	frame->data_len = 0;
-	frame->length = FRAME_LEN;
+	f->head = 0x55;
+	f->expend = EXPEND;
+	f->token_len = 0; 
+	f->data_len = 0;
+	f->length = FRAME_LEN;
+	f->tail = 0x55;
 	return 0;
 }
 
-int set_cmd(struct frame_head *frame,u8 cmd_type,unsigned char cmd)
+int set_cmd(struct frame *frame,u8 cmd_type,unsigned char cmd)
 {
 	frame->cmd_type = cmd_type;
 	frame->cmd = cmd;
 	return 0;
 }
 
-int set_status(struct frame_head *frame,u8 status)
+int set_status(struct frame *f,u8 status)
 {
-	frame->status = status;
+	f->status = status;
 	return 0;
 }
 
-int set_device_id(struct frame_head *frame,u8 * device_id)
+int set_device_id(struct frame *f,u8 * device_id)
 {
 	if(device_id == NULL){
 		return -1;
 	}
-	memcpy(frame->device_id,device_id,DEVICE_LEN);
-	return 0;
-}
-int copy_from_frame(u8* buf,struct frame_head *frame)
-{
-	int i = 0;
-	buf[0] = frame->head;
-	memcpy(&buf[1],&frame->length,2);
-	buf[3] = frame->cmd_type;
-	buf[4] = frame->cmd;
-	memcpy(&buf[5],&frame->cmd_seq,2);
-	memcpy(&buf[7],&frame->expend,2);
-	buf[9] = frame->status;
-	memcpy(&buf[10],frame->device_id,DEVICE_LEN);
-	memcpy(&buf[26],&frame->token_len,2);
-	memcpy(&buf[28],&frame->data_len,2);
+	memcpy(f->device_id,device_id,DEVICE_LEN);
 	return 0;
 }
 
-int copy_to_frame(struct frame_head* f,u8* buf)
+int set_token(struct frame *f,u8* token,u16 len)
+{
+	if(NULL == token){
+		DEBUG("token pointer is NULL\n");
+		return -1;
+	}
+	f->token = malloc(len);
+	if(NULL == f->token){
+		DEBUG("Malloc error\n");
+		return -1;
+	}
+	memcpy(f->token,token,len);
+	f->token_len = len;
+	f->length += len;
+	return 0;
+}
+int set_data(struct frame *f,u8* data,u16 len)
+{
+	if(NULL == data){
+		DEBUG("data pointer is NULL\n");
+		return -1;
+	}
+	f->data = malloc(len);
+	if(NULL == f->data){
+		DEBUG("Malloc error\n");
+		return -1;
+	}
+	memcpy(f->data,data,len);
+	f->data_len = len;
+	f->length += len;
+	return 0;
+}
+
+int copy_from_frame(u8* buf,struct frame *f)
+{
+	int i = 0;
+	buf[0] = f->head;
+	memcpy(&buf[1],&f->length,2);
+	buf[3] = f->cmd_type;
+	buf[4] = f->cmd;
+	memcpy(&buf[5],&f->cmd_seq,2);
+	memcpy(&buf[7],&f->expend,2);
+	buf[9] = f->status;
+	memcpy(&buf[10],f->device_id,DEVICE_LEN);
+	memcpy(&buf[26],&f->token_len,2);
+	memcpy(&buf[28],&f->token,f->token_len);
+	memcpy(&buf[28 + f->token_len],&f->data_len,2);
+	memcpy(&buf[28 + f->token_len + 2],f->data,f->data_len);
+	memcpy(&buf[28 + f->token_len +2 + f->data_len],&f->crc,2);
+	buf[f->length - 1] = f->tail;
+	return 0;
+}
+
+int copy_to_frame(struct frame* f,u8* buf)
 {
 	f->head = buf[0];
 	f->length = (u16)buf[1];
@@ -78,7 +117,11 @@ int copy_to_frame(struct frame_head* f,u8* buf)
 	f->status = buf[9];
 	memcpy(f->device_id,&buf[10],DEVICE_LEN);
 	f->token_len = (u16)buf[26];
-	f->data_len = (u16)buf[28];
+	memcpy(f->token,&buf[28],f->token_len);
+	f->data_len = (u16)buf[28 + f->token_len];
+	memcpy(f->data,buf[28 + f->token_len + 2],f->data_len);
+	f->crc = (u16)buf[28 + f->token_len + 2 + f->data_len];
+	f->tail = buf[f->length -1];
 	print_frame(f);
 	return 0;
 }
@@ -88,51 +131,44 @@ int set_frame(const void* msg,int len)
 		DEBUG("Send buffer is full!\n");
 		return -1;
 	}
-	struct frame_head frame;
+	struct frame f;
 	u8 token[] = "wanghauzhong";
 	u8 send_buf[512];
 	int i = 0;
 	u16 token_length = strlen(token);
 	
 	memset(send_buf,0,512);
-	if(init_frame(&frame) != 0){
+	if(init_frame(&f) != 0){
 		DEBUG("init_frame error");
 	}
-	if(set_status(&frame,0x02) != 0){
+	if(set_status(&f,0x02) != 0){
 		DEBUG("set_status error");
 	}
-	if(set_cmd(&frame,0xA0,0x01) != 0){
+	if(set_cmd(&f,0xA0,0x01) != 0){
 		DEBUG("set_cmd error");
 	}
-	if(set_device_id(&frame,device_id_global) != 0){
+	if(set_device_id(&f,device_id_global) != 0){
 		DEBUG("set_device_id error");
 	}
-	frame.data_len += len;
-	frame.token_len += token_length;
-	frame.length += len;
-	frame.length += token_length;
-	frame.length += TAIL_LEN;
-	copy_from_frame(send_buf,&frame);
-	//memcpy(send_buf,(char *)&frame,FRAME_LEN);
-	memcpy(&send_buf[FRAME_LEN],token,token_length);
-	memcpy(&send_buf[FRAME_LEN + token_length],msg,len);
-	u16 crc = cal_crc16(send_buf,frame.length);
-	memcpy(&send_buf[FRAME_LEN + token_length + len],&crc,2);
-	send_buf[FRAME_LEN + token_length + len + 2] = 0x55;
-	print_frame(&frame);
-	printf("token:%s\n",token);
-	printf("data:%s\n",msg);
-	printf("crc:%x\n",crc);
-	printf("tail:%x\n",0x55);
-	for(i = 0;i < frame.length;++i)
-		printf("%x ",send_buf[i]);
-	printf("\n");
-	int send_length = encode(tx_buf.data[tx_buf.last],send_buf);
-	tx_buf.last = (tx_buf.last + 1)%BUFFER_COUNT;
-	for(i = 0;i < send_length;i++){
-		printf("%x ",tx_buf.data[tx_buf.last][i]);
+	if(set_token(&f,token,token_length) != 0){
+		DEBUG("set_token error");
 	}
-	printf("\n");
+	if(set_data(&f,(u8 *)msg,len) != 0){
+		DEBUG("set_data error");
+	}
+	f.length += TAIL_LEN;
+	//memcpy(&send_buf[FRAME_LEN],token,token_length);
+	//memcpy(&send_buf[FRAME_LEN + token_length],msg,len);
+	u16 crc = cal_crc16(send_buf,f.length);
+	f.crc = crc;
+	copy_from_frame(send_buf,&f);
+	//memcpy(&send_buf[FRAME_LEN + token_length + len],&crc,2);
+	//send_buf[FRAME_LEN + token_length + len + 2] = 0x55;
+	print_frame(&f);
+	print_buf(send_buf,f.length);
+	int send_length = encode(tx_buf.data[tx_buf.last],send_buf);
+	print_buf(tx_buf.data[tx_buf.last],send_length);
+	tx_buf.last = (tx_buf.last + 1)%BUFFER_COUNT;
 	return 0;
 }
 int send_frame(int s,unsigned int flags)
@@ -141,10 +177,10 @@ int send_frame(int s,unsigned int flags)
 		DEBUG("Send buffer is empty!\n");
 		return -1;
 	}
-	u16 length = tx_buf[first][1];
+	u16 length = tx_buf.data[tx_buf.first][1];
 	//memcpy(buf,tx_buf[first],length);
-	tx_buf.first = (tx.first + 1)%BUFFER_COUNT;
-	return send(s,tx_buf.data[first],length,flags);
+	tx_buf.first = (tx_buf.first + 1)%BUFFER_COUNT;
+	return send(s,tx_buf.data[tx_buf.first],length,flags);
 	
 }
 
@@ -233,8 +269,8 @@ u16 cal_crc16(u8 * buf,unsigned int len)
 	return crc16;
 }
 
-//Get frame_head from buf recieved
-int get_frame(struct frame_head *frame,u8* buf)
+//Get frame from buf recieved
+int get_frame(struct frame *f,u8* buf)
 {	
 	/*
 	if(rx_buf.first == rx_buf.last){
@@ -250,38 +286,42 @@ int get_frame(struct frame_head *frame,u8* buf)
 	memset(data,0,512);
 	memset(buffer,0,512);
 	int length = decode(buffer,buf);
-	int i = 0;
-	for(i = 0;i < length;i++)
-		printf("%x ",buffer[i]);
-	printf("\n");
-	copy_to_frame(frame,buffer);
-	printf("\n");
+	print_buf(buffer,length);
+	copy_to_frame(f,buffer);
 	u16 crc_get;
-	memcpy(&crc_get,&buffer[frame->length -3],2);
-	u16 crc_cal = cal_crc16(buffer,frame->length - 3);
+	memcpy(&crc_get,&buffer[f->length -3],2);
+	u16 crc_cal = cal_crc16(buffer,f->length - 3);
 	DEBUG("crc:%x\n",crc_cal);
 	if(crc_get != crc_cal)
 		DEBUG("crc error!\n");
-	memcpy(token,&buffer[FRAME_LEN],frame->token_len);
-	memcpy(data,&buffer[FRAME_LEN + frame->token_len],frame->data_len);
-	printf("token:%s\n",token);
-	printf("data:%s\n",data);
-	u8 tail = buffer[frame->length - 1];
-	printf("tail:%x\n",tail);
+	//memcpy(token,&buffer[FRAME_LEN],f->token_len);
+	//memcpy(data,&buffer[FRAME_LEN + f->token_len],f->data_len);
+	print_frame(f);
+	return 0;
 }
 
-void print_frame(struct frame_head *frame)
+void print_frame(struct frame *f)
 {
-	printf("head = %x\n",frame->head);
-	printf("length = %hu\n",frame->length);
-	printf("command type = %x\n",frame->cmd_type);
-	printf("command = %x\n",frame->cmd);
-	printf("command sequence = %hu\n",frame->cmd_seq);
-	printf("expend = %hu\n",frame->expend);
-	printf("status = %x\n",frame->status);
-	printf("device_id is:%s\n",frame->device_id);
-	printf("token_len = %hu\n",frame->token_len);
-	printf("data_len is:%d\n",frame->data_len);
+	printf("head = %x\n",f->head);
+	printf("length = %hu\n",f->length);
+	printf("command type = %x\n",f->cmd_type);
+	printf("command = %x\n",f->cmd);
+	printf("command sequence = %hu\n",f->cmd_seq);
+	printf("expend = %hu\n",f->expend);
+	printf("status = %x\n",f->status);
+	printf("device_id is:%s\n",f->device_id);
+	printf("token_len = %hu\n",f->token_len);
+	printf("token:");
+	print_buf(f->token,f->token_len);
+	printf("data_len is:%d\n",f->data_len);
+	printf("data:");
+	print_buf(f->data,f->data_len);
 }
 
-
+void print_buf(u8* buf,u16 len)
+{
+	int i;
+	for(i = 0;i < len;i++)
+		printf("%X ",buf[i]);
+	printf("\n");
+}
